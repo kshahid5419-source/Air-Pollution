@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://airwatch:airwatch@db:5432/airwatch
+      - FRONTEND_ORIGIN=http://localhost:5173,http://localhost:4173
+    depends_on:
+      - db
+    volumes:
+      - ./backend/app:/app/app
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: airwatch
+      POSTGRES_PASSWORD: airwatch
+      POSTGRES_DB: airwatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
