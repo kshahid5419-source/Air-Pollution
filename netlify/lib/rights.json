@@ -1,0 +1,59 @@
+{
+  "core_instruments": [
+    {
+      "name": "UNGA Resolution 76/300 (2022)",
+      "title": "Right to a Clean, Healthy and Sustainable Environment",
+      "summary": "Recognises that a clean, healthy and sustainable environment is a universal human right. Air pollution is a direct violation of this right for hundreds of millions of people.",
+      "relevance": "Provides the strongest global normative foundation for treating clean air as a justiciable right."
+    },
+    {
+      "name": "Paris Agreement (2015)",
+      "title": "Climate Action & Equity",
+      "summary": "Commits parties to limit warming and to pursue efforts to 1.5°C, while recognising equity and common but differentiated responsibilities (CBDR-RC).",
+      "relevance": "Air pollution co-benefits of climate mitigation are explicitly recognised; fossil-fuel combustion drives both climate change and lethal particulate pollution."
+    },
+    {
+      "name": "UNFCCC",
+      "title": "United Nations Framework Convention on Climate Change",
+      "summary": "The parent treaty establishing the principle of common but differentiated responsibilities and respective capabilities.",
+      "relevance": "Frames why historically high-emitting nations and actors bear greater responsibility for both climate and air-quality harm."
+    },
+    {
+      "name": "Aarhus Convention principles",
+      "title": "Access to Information, Public Participation & Justice",
+      "summary": "Although regional, its three pillars (information, participation, justice) are widely cited as global best practice for environmental democracy.",
+      "relevance": "Community reporting and transparent air-quality data are practical expressions of the right to environmental information."
+    },
+    {
+      "name": "Polluter Pays Principle",
+      "title": "Rio Declaration Principle 16",
+      "summary": "The polluter should bear the cost of pollution, with due regard to the public interest and without distorting international trade.",
+      "relevance": "Supports accountability for industrial, transport and open-burning sources of local air pollution."
+    }
+  ],
+  "climate_justice_pillars": [
+    {
+      "title": "Distributive Justice",
+      "text": "The poorest communities and Global South cities often breathe the most polluted air while having contributed least to the emissions causing the problem."
+    },
+    {
+      "title": "Procedural Justice",
+      "text": "Affected people must have meaningful access to information, decision-making processes, and remedies — not merely be subjects of monitoring."
+    },
+    {
+      "title": "Intergenerational Justice",
+      "text": "Children and future generations inherit both the climate system and the cumulative health burden of chronic exposure to polluted air."
+    },
+    {
+      "title": "Recognition Justice",
+      "text": "Informal workers, outdoor labourers, women cooking with solid fuels, and residents of informal settlements are systematically under-counted in official data."
+    }
+  ],
+  "key_facts": [
+    "Air pollution is responsible for an estimated 7 million premature deaths every year (WHO).",
+    "More than 90% of the world’s population breathes air that exceeds WHO guideline limits.",
+    "The health burden falls disproportionately on low- and middle-income countries.",
+    "Fine particulate matter (PM2.5) is both a major climate forcer and the leading environmental risk factor for premature death.",
+    "The right to a clean environment was recognised by the UN General Assembly in 2022 as a human right."
+  ]
+}

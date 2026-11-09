@@ -1,6 +1,7 @@
-// In production, set VITE_API_URL to your backend origin.
-// For same-origin reverse-proxy setups, leave it empty so requests go to /api.
-const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+// By default requests go to same-origin /api (served by Netlify Functions).
+// Set VITE_API_URL only if you want to point at a separately hosted backend,
+// e.g. VITE_API_URL=http://127.0.0.1:8000 for the local Python API.
+const API = import.meta.env.VITE_API_URL ?? ''
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, options)
