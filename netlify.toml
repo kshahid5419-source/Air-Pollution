@@ -1,0 +1,17 @@
+[build]
+  command = "npm --prefix AirWatch-AI/frontend ci && npm --prefix AirWatch-AI/frontend run build"
+  publish = "AirWatch-AI/frontend/dist"
+
+[functions]
+  directory = "netlify/functions"
+
+[dev]
+  command = "npm --prefix AirWatch-AI/frontend run dev"
+  targetPort = 5173
+  framework = "#custom"
+
+# Single-page app fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
