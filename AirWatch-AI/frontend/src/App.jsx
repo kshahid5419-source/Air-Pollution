@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip as LTooltip, useMap } from 'react-leaflet'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import {
   Activity, MapPin, Wind, Users, BrainCircuit, Plus, RefreshCw,
-  ShieldCheck, AlertTriangle, Scale, Globe2, HeartHandshake, BookOpen
+  ShieldCheck, AlertTriangle, Scale, Globe2, HeartHandshake, BookOpen, Layers, Crosshair
 } from 'lucide-react'
 import { getJSON, postJSON } from './api'
 
@@ -19,10 +19,24 @@ const PRESETS = [
   { name: 'Nairobi', latitude: -1.2921, longitude: 36.8219 },
 ]
 
-const color = (v) =>
-  v <= 50 ? '#22c55e' : v <= 100 ? '#eab308' : v <= 150 ? '#f97316' : v <= 200 ? '#ef4444' : '#a855f7'
+const AQI_BANDS = [
+  { max: 50, color: '#16a34a', label: 'Good', short: 'Good' },
+  { max: 100, color: '#ca8a04', label: 'Moderate', short: 'Moderate' },
+  { max: 150, color: '#ea580c', label: 'Unhealthy for sensitive groups', short: 'Sensitive' },
+  { max: 200, color: '#dc2626', label: 'Unhealthy', short: 'Unhealthy' },
+  { max: 300, color: '#9333ea', label: 'Very unhealthy', short: 'Very unhealthy' },
+  { max: Infinity, color: '#881337', label: 'Hazardous', short: 'Hazardous' },
+]
+const METRICS = [
+  { key: 'aqi', label: 'AQI', unit: 'US AQI' },
+  { key: 'pm2_5', label: 'PM2.5', unit: 'PM2.5 in µg/m³' },
+  { key: 'pm10', label: 'PM10', unit: 'PM10 in µg/m³' },
+]
+const color = (v) => AQI_BANDS.find((b) => v <= b.max).color
+const tintBg = (v) => (v == null ? '#f1f5f9' : `${color(v)}1a`)
+const fmt = (n) => (n != null ? Number(n).toFixed(1) : '—')
 const label = (v) =>
-  v <= 50 ? 'Good' : v <= 100 ? 'Moderate' : v <= 150 ? 'Unhealthy for sensitive groups' : v <= 200 ? 'Unhealthy' : 'Very unhealthy'
+  v <= 50 ? 'Good' : v <= 100 ? 'Moderate' : v <= 150 ? 'Unhealthy for sensitive groups' : v <= 200 ? 'Unhealthy' : v <= 300 ? 'Very unhealthy' : 'Hazardous'
 
 function ResizeMap() {
   const map = useMap()
@@ -36,8 +50,21 @@ function PanToSelected({ point }) {
   const map = useMap()
   useEffect(() => {
     if (point?.latitude != null && point?.longitude != null)
-      map.flyTo([point.latitude, point.longitude], 12, { duration: 0.7 })
+      map.flyTo([point.latitude, point.longitude], Math.max(map.getZoom(), 11), { duration: 0.6 })
   }, [map, point?.latitude, point?.longitude])
+  return null
+}
+
+function FitToPoints({ points, fitKey }) {
+  const map = useMap()
+  const sig = points.map((p) => `${p.latitude},${p.longitude}`).join('|')
+  useEffect(() => {
+    if (points.length > 1)
+      map.fitBounds(
+        points.map((p) => [p.latitude, p.longitude]),
+        { padding: [48, 48], maxZoom: 12 }
+      )
+  }, [map, sig, fitKey])
   return null
 }
 
@@ -56,7 +83,7 @@ function Metric({ icon: Icon, title, value, detail, tint }) {
 
 export default function App() {
   const [places, setPlaces] = useState([])
-  const [selected, setSelected] = useState({ id: 'central', name: 'Lahore Central', ...CENTER })
+  const [selected, setSelected] = useState({ id: 'centre', name: 'Lahore', ...CENTER })
   const [hotspots, setHotspots] = useState(null)
   const [area, setArea] = useState({ name: 'Lahore', ...CENTER })
   const [query, setQuery] = useState('')
@@ -70,6 +97,12 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [modal, setModal] = useState(false)
+  const [showPoints, setShowPoints] = useState(true)
+  const [showReports, setShowReports] = useState(true)
+  const [fitKey, setFitKey] = useState(0)
+  const [metric, setMetric] = useState('aqi')
+  const [benchmark, setBenchmark] = useState({})
+  const [benchBusy, setBenchBusy] = useState(false)
   const [form, setForm] = useState({
     category: 'smoke',
     description: '',
@@ -93,7 +126,7 @@ export default function App() {
         `/api/hotspots?latitude=${a.latitude}&longitude=${a.longitude}&name=${encodeURIComponent(a.name)}`
       )
       setHotspots(h)
-      setPlaces(h.locations.map(({ id, name, latitude, longitude }) => ({ id, name, latitude, longitude })))
+      setPlaces(h.locations)
     } catch (e) {
       setError(e.message)
     }
@@ -178,9 +211,26 @@ export default function App() {
     }
   }
 
+  async function loadBenchmark() {
+    setBenchBusy(true)
+    const entries = await Promise.all(
+      PRESETS.map(async (c) => {
+        try {
+          const d = await getJSON(`/api/air-quality?latitude=${c.latitude}&longitude=${c.longitude}&past_days=0`)
+          return [c.name, d.current?.us_aqi ?? null]
+        } catch {
+          return [c.name, null]
+        }
+      })
+    )
+    setBenchmark(Object.fromEntries(entries))
+    setBenchBusy(false)
+  }
+
   useEffect(() => {
     refreshReports()
     refreshHotspots()
+    loadBenchmark()
     getJSON('/api/rights')
       .then(setRights)
       .catch(() => {})
@@ -202,6 +252,31 @@ export default function App() {
       }))
       .filter((x) => x.aqi != null)
   }, [air])
+
+  const mapPoints = places
+
+  const compare = useMemo(() => {
+    const locs = hotspots?.locations || []
+    const aqis = locs.map((p) => p.aqi).filter((v) => v != null)
+    const vals = locs.map((p) => p[metric]).filter((v) => v != null)
+    const avg = aqis.length ? Math.round(aqis.reduce((a, b) => a + b, 0) / aqis.length) : null
+    const rows = [...locs].sort((a, b) => (b[metric] ?? -1) - (a[metric] ?? -1))
+    return {
+      rows,
+      avg,
+      spread: aqis.length > 1 ? Math.max(...aqis) - Math.min(...aqis) : null,
+      metricAvg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null,
+      metricMax: Math.max(1, ...vals),
+    }
+  }, [hotspots, metric])
+
+  const benchmarkRows = useMemo(() => {
+    const rows = PRESETS.map((c) => ({ name: c.name, aqi: benchmark[c.name] ?? null }))
+    const inPresets = rows.find((r) => r.name === area.name)
+    if (inPresets) inPresets.current = true
+    else rows.push({ name: area.name, aqi: compare.avg, current: true })
+    return rows.sort((a, b) => (b.aqi ?? -1) - (a.aqi ?? -1))
+  }, [benchmark, area.name, compare.avg])
 
   async function submit(e) {
     e.preventDefault()
@@ -475,45 +550,160 @@ export default function App() {
           </p>
         </section>
 
-        {/* HOTSPOTS */}
+        {/* COMPARISON */}
         <section className="section" id="hotspots">
           <div className="section-head">
             <div>
               <div className="eyebrow">02 · Compare</div>
               <h2>Pollution hotspot watch</h2>
-              <p>Compare modeled AQI across points around {area.name}.</p>
+              <p>
+                Rank modeled readings across points around {area.name}, then benchmark against major
+                cities worldwide.
+              </p>
             </div>
             <button className="btn btn-ghost" onClick={() => refreshHotspots()}>
               <RefreshCw size={15} /> Update comparison
             </button>
           </div>
-          <div className="hotspot-grid">
-            {(hotspots?.locations || []).map((p) => (
-              <button
-                key={p.id}
-                className={`hotspot ${selected.id === p.id ? 'chosen' : ''}`}
-                onClick={() => setSelected(p)}
-              >
-                <span className="name">{p.name}</span>
-                <span className="val" style={{ color: p.aqi != null ? color(p.aqi) : '#5f7a88' }}>
-                  {p.aqi ?? '—'}
-                </span>
-                <small>
-                  {p.aqi != null ? label(p.aqi) : 'No reading'} · US AQI
-                </small>
-                <small>
-                  PM2.5: {p.pm2_5 != null ? `${Number(p.pm2_5).toFixed(1)} µg/m³` : '—'}
-                </small>
-              </button>
-            ))}
+
+          <div className="compare-summary">
+            <div className="summary-tile">
+              <span>Area average</span>
+              <strong style={{ color: compare.avg != null ? color(compare.avg) : undefined }}>
+                {compare.avg ?? '—'}
+              </strong>
+              <small>{compare.avg != null ? label(compare.avg) : 'US AQI'}</small>
+            </div>
+            <div className="summary-tile">
+              <span>Highest</span>
+              <strong style={{ color: hotspots?.highest ? color(hotspots.highest.aqi) : undefined }}>
+                {hotspots?.highest?.aqi ?? '—'}
+              </strong>
+              <small>{hotspots?.highest?.name || '—'}</small>
+            </div>
+            <div className="summary-tile">
+              <span>Lowest</span>
+              <strong style={{ color: hotspots?.lowest ? color(hotspots.lowest.aqi) : undefined }}>
+                {hotspots?.lowest?.aqi ?? '—'}
+              </strong>
+              <small>{hotspots?.lowest?.name || '—'}</small>
+            </div>
+            <div className="summary-tile">
+              <span>Spread</span>
+              <strong>{compare.spread ?? '—'}</strong>
+              <small>AQI points between best and worst</small>
+            </div>
           </div>
-          <p className="attribution">
-            {hotspots?.highest
-              ? `Highest estimate: ${hotspots.highest.name} (${hotspots.highest.aqi} AQI). `
-              : ''}
-            {hotspots?.lowest ? `Lowest: ${hotspots.lowest.name} (${hotspots.lowest.aqi} AQI). ` : ''}
-            {hotspots?.note || ''}
-          </p>
+
+          <div className="compare-grid">
+            <div className="card compare-card">
+              <div className="card-head">
+                <div>
+                  <h3>Local ranking</h3>
+                  <p>Worst to best · click a row to inspect it</p>
+                </div>
+                <div className="segmented" role="tablist" aria-label="Comparison metric">
+                  {METRICS.map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={metric === m.key}
+                      className={metric === m.key ? 'on' : ''}
+                      onClick={() => setMetric(m.key)}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rank-list">
+                {compare.rows.map((p, i) => {
+                  const v = p[metric]
+                  const diff = v != null && compare.metricAvg != null ? v - compare.metricAvg : null
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`rank-row ${selected.id === p.id ? 'chosen' : ''}`}
+                      onClick={() => setSelected(p)}
+                    >
+                      <span className="rank-n">{i + 1}</span>
+                      <span className="rank-name">
+                        {p.name}
+                        <small>{p.aqi != null ? label(p.aqi) : 'No reading'}</small>
+                      </span>
+                      <span className="rank-bar">
+                        <i
+                          style={{
+                            width: v != null ? `${Math.max(4, (v / compare.metricMax) * 100)}%` : 0,
+                            background: p.aqi != null ? color(p.aqi) : '#cbd5e1',
+                          }}
+                        />
+                      </span>
+                      <span className="rank-val">
+                        {v != null ? (metric === 'aqi' ? v : Number(v).toFixed(1)) : '—'}
+                        {diff != null && (
+                          <small className={diff > 0 ? 'up' : diff < 0 ? 'down' : ''}>
+                            {diff > 0 ? '+' : ''}
+                            {metric === 'aqi' ? Math.round(diff) : diff.toFixed(1)} vs avg
+                          </small>
+                        )}
+                      </span>
+                    </button>
+                  )
+                })}
+                {!compare.rows.length && <p className="muted-note">Loading comparison…</p>}
+              </div>
+              <p className="card-foot">
+                {METRICS.find((m) => m.key === metric)?.unit} · {hotspots?.note || ''}
+              </p>
+            </div>
+
+            <div className="card compare-card">
+              <div className="card-head">
+                <div>
+                  <h3>Global city benchmark</h3>
+                  <p>How {area.name} compares with major cities right now</p>
+                </div>
+                <button type="button" className="toggle" onClick={loadBenchmark} disabled={benchBusy}>
+                  <RefreshCw size={13} className={benchBusy ? 'spin' : ''} /> Refresh
+                </button>
+              </div>
+              <div className="bench-list">
+                {benchmarkRows.map((c) => (
+                  <div className={`bench-row ${c.current ? 'current' : ''}`} key={c.name}>
+                    <span className="bench-name">
+                      {c.name}
+                      {c.current && <em>you</em>}
+                    </span>
+                    <span className="bench-track">
+                      {[50, 100, 150, 200].map((t) => (
+                        <i key={t} style={{ left: `${t / 3}%` }} />
+                      ))}
+                      <b
+                        style={{
+                          width: c.aqi != null ? `${Math.min(100, Math.max(3, c.aqi / 3))}%` : 0,
+                          background: c.aqi != null ? color(c.aqi) : '#cbd5e1',
+                        }}
+                      />
+                    </span>
+                    <span className="bench-val" style={{ color: c.aqi != null ? color(c.aqi) : undefined }}>
+                      {c.aqi ?? (benchBusy ? '…' : '—')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="bench-axis">
+                {[0, 50, 100, 150, 200, 300].map((t) => (
+                  <span key={t} style={{ left: `${t / 3}%` }}>
+                    {t === 300 ? '300+' : t}
+                  </span>
+                ))}
+              </div>
+              <p className="card-foot">Current-hour US AQI model estimates. Scale capped at 300.</p>
+            </div>
+          </div>
         </section>
 
         {/* RIGHTS & CLIMATE JUSTICE */}
@@ -651,25 +841,26 @@ export default function App() {
                   <AreaChart data={chart}>
                     <defs>
                       <linearGradient id="aqiFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3ee0b8" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#3ee0b8" stopOpacity={0} />
+                        <stop offset="0%" stopColor="#0f766e" stopOpacity={0.22} />
+                        <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1c3a4a" />
-                    <XAxis dataKey="time" tick={{ fill: '#5f7a88', fontSize: 10 }} minTickGap={35} />
-                    <YAxis tick={{ fill: '#5f7a88', fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 10 }} minTickGap={35} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
                     <Tooltip
                       contentStyle={{
-                        background: '#0f2230',
-                        border: '1px solid #2a5366',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
                         borderRadius: 10,
-                        color: '#e8f2f6',
+                        color: '#0f172a',
+                        boxShadow: '0 8px 24px rgba(15,23,42,0.08)',
                       }}
                     />
                     <Area
                       type="monotone"
                       dataKey="aqi"
-                      stroke="#3ee0b8"
+                      stroke="#0f766e"
                       fill="url(#aqiFill)"
                       strokeWidth={2}
                       connectNulls
